@@ -29,7 +29,6 @@ const CONFIG_FILE = 'config.json';
 
 function fixEncoding(str) {
   if (!str || typeof str !== 'string') return '';
-  console.log('Texto original:', str); // Para depurar
   return str
     .replace(/�/g, (match, offset, string) => {
       // Intenta deducir qué reemplazar según el contexto
