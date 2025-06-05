@@ -1,0 +1,30 @@
+# Node modules (no subir la carpeta node_modules)
+node_modules/
+
+# Archivos de entorno con secretos (como tus tokens)
+.env
+
+# Archivos de logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos de estado generados
+estado_ofertas.json
+
+# Archivos de configuración local que no deban compartirse
+config.json
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Carpeta de builds o distribución (si usás)
+dist/
+build/
+
+# Editor de texto / IDE
+.vscode/
+.idea/
