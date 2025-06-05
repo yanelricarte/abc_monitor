@@ -1,11 +1,21 @@
-require('dotenv').config();
-const fs = require('fs');
-const axios = require('axios');
-const TelegramBot = require('node-telegram-bot-api');
-const cron = require('node-cron');
+import express from 'express';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import axios from 'axios';
+import TelegramBot from 'node-telegram-bot-api';
+import cron from 'node-cron';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
+
+app.get('/', (_req, res) => {
+  res.send('Bot activo y funcionando!');
+});
 
 if (!BOT_TOKEN || !CHAT_ID) {
   throw new Error('BOT_TOKEN y CHAT_ID deben estar definidos en las variables de entorno.');
@@ -18,9 +28,19 @@ const ESTADO_FILE = 'estado_ofertas.json';
 const CONFIG_FILE = 'config.json';
 
 function fixEncoding(str) {
-  if (!str) return '';
+  if (!str || typeof str !== 'string') return '';
+  console.log('Texto original:', str); // Para depurar
   return str
-    .replace(/�/g, '°')   
+    .replace(/�/g, (match, offset, string) => {
+      // Intenta deducir qué reemplazar según el contexto
+      // Esto es un ejemplo básico, puedes ajustarlo según patrones
+      if (string[offset + 1]?.match(/[aAeE]/)) return 'á';
+      if (string[offset + 1]?.match(/[eEiI]/)) return 'é';
+      if (string[offset + 1]?.match(/[iIoO]/)) return 'í';
+      if (string[offset + 1]?.match(/[oOuU]/)) return 'ó';
+      if (string[offset + 1]?.match(/[uUnN]/)) return 'ú';
+      return '°'; // Por defecto, reemplaza por °
+    })
     .replace(/Ã¡/g, 'á')
     .replace(/Ã©/g, 'é')
     .replace(/Ã­/g, 'í')
@@ -228,4 +248,7 @@ Enlace: ${offer.link}
 }
 
 // Para probar manualmente, descomenta la siguiente línea:
-forzarEnvio();
+//forzarEnvio();
+app.listen(PORT, () => {
+  console.log(`Servidor escuchando en puerto ${PORT}`);
+});

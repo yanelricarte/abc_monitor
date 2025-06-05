@@ -1,19 +1,33 @@
 {
   "name": "monitor",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
+    "start": "node monitor.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "��#\u0000 \u0000a\u0000b\u0000c\u0000_\u0000m\u0000o\u0000n\u0000i\u0000t\u0000o\u0000r\u0000\r\u0000 \u0000",
   "dependencies": {
     "axios": "^1.9.0",
-    "dot-env": "^0.0.1",
     "dotenv": "^16.5.0",
+    "express": "^5.1.0",
     "node-cron": "^4.1.0",
     "node-telegram-bot-api": "^0.66.0"
-  }
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yanelricarte/abc_monitor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yanelricarte/abc_monitor/issues"
+  },
+  "homepage": "https://github.com/yanelricarte/abc_monitor#readme"
 }
