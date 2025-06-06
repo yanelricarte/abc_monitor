@@ -245,7 +245,7 @@ Enlace: ${offer.link}
 }
 
 // Para probar manualmente, descomenta la siguiente línea:
-forzarEnvio();
+//forzarEnvio();
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en puerto ${PORT}`);
 });
