@@ -27,18 +27,23 @@ const URL_API = 'https://servicios3.abc.gob.ar/valoracion.docente/api/apd.oferta
 const ESTADO_FILE = 'estado_ofertas.json';
 const CONFIG_FILE = 'config.json';
 
+// 👉 Formatea fechas al estilo argentino
+function formatDateArg(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return isNaN(date) ? dateStr : new Intl.DateTimeFormat('es-AR').format(date);
+}
+
 function fixEncoding(str) {
   if (!str || typeof str !== 'string') return '';
   return str
     .replace(/�/g, (match, offset, string) => {
-      // Intenta deducir qué reemplazar según el contexto
-      // Esto es un ejemplo básico, puedes ajustarlo según patrones
       if (string[offset + 1]?.match(/[aAeE]/)) return 'á';
       if (string[offset + 1]?.match(/[eEiI]/)) return 'é';
       if (string[offset + 1]?.match(/[iIoO]/)) return 'í';
       if (string[offset + 1]?.match(/[oOuU]/)) return 'ó';
       if (string[offset + 1]?.match(/[uUnN]/)) return 'ú';
-      return '°'; // Por defecto, reemplaza por °
+      return '°';
     })
     .replace(/Ã¡/g, 'á')
     .replace(/Ã©/g, 'é')
@@ -46,24 +51,46 @@ function fixEncoding(str) {
     .replace(/Ã³/g, 'ó')
     .replace(/Ãº/g, 'ú')
     .replace(/Ã±/g, 'ñ')
-    .replace(/Ã/g, 'Á')
+    .replace(/Ã/g, 'Á')
     .replace(/Ã‰/g, 'É')
-    .replace(/Ã/g, 'Í')
-    .replace(/Ã“/g, 'Ó')
+    .replace(/Ã/g, 'Í')
+    .replace(/Ã"/g, 'Ó')
     .replace(/Ãš/g, 'Ú')
-    .replace(/Ã‘/g, 'Ñ');
+    .replace(/Ã'/g, 'Ñ');
 }
+
 function cleanString(str) {
   if (!str) return '';
   return fixEncoding(str.trim().normalize('NFC'));
 }
 
+// Fixed function name and implementation
+function formatDateTimeArg(dateTimeStr, omitSpecificTime = false) {
+  if (!dateTimeStr) return '';
+  let dt = dateTimeStr.endsWith('Z') ? dateTimeStr.slice(0, -1) : dateTimeStr;
+  if (omitSpecificTime && dt.endsWith('T03:00:00')) {
+    return dt.slice(0, 10);
+  }
+  // Format the datetime for Argentina locale
+  try {
+    const date = new Date(dt);
+    return isNaN(date) ? dt : new Intl.DateTimeFormat('es-AR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  } catch {
+    return dt;
+  }
+}
 
 function loadState() {
   try {
     const data = fs.readFileSync(ESTADO_FILE, 'utf8');
     return JSON.parse(data);
-  } catch (e) {
+  } catch {
     return { seen_offers: [], firstRun: true };
   }
 }
@@ -73,17 +100,12 @@ function saveState(state) {
 }
 
 function loadConfig() {
-  try {
-    const data = fs.readFileSync(CONFIG_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (e) {
-    console.error('No se pudo cargar config.json, usando valores por defecto');
-    return {
-      rows: 100,
-      descdistrito: 'general pueyrredon',
-      estado: 'Publicada'
-    };
-  }
+  // Usar variables de entorno si están disponibles, sino valores por defecto
+  return {
+    rows: parseInt(process.env.ROWS) || 100,
+    descdistrito: process.env.DISTRITO || 'general pueyrredon',
+    estado: process.env.ESTADO || 'Publicada'
+  };
 }
 
 async function getOffers(filters) {
@@ -113,17 +135,16 @@ async function getOffers(filters) {
       return {
         id: offerId.toString(),
         title: cleanString(offer.cargo),
-        date: cleanString(offer.inicio),
-        cierreoferta: cleanString(offer.finoferta),
+        cierreoferta: formatDateTimeArg(offer.finoferta),
         zone: cleanString(offer.descdistrito),
         nivelModalidad: cleanString(offer.descnivelmodalidad),
         cursodivision: cleanString(offer.cursodivision),
         escuela: cleanString(offer.escuela),
         domiciliodesempeno: cleanString(offer.domiciliodesempeno),
         estado: cleanString(offer.estado),
-        supl_hasta: cleanString(offer.supl_hasta),
+        supl_hasta: formatDateArg(cleanString(offer.supl_hasta)),
         turno: cleanString(offer.turno),
-        tomaposesion: cleanString(offer.tomaposesion),
+        tomaposesion: formatDateArg(cleanString(offer.tomaposesion)),
         supl_revista: cleanString(offer.supl_revista),
         position_type: cleanString(offer.area),
         link: `https://servicios.abc.gob.ar/actos.publicos.digitales/`
@@ -138,13 +159,13 @@ async function getOffers(filters) {
 async function sendTelegramMessage(message) {
   try {
     await bot.sendMessage(CHAT_ID, message, { parse_mode: 'HTML' });
-    console.log('📨 Mensaje enviado a Telegram:\n', message);
+    console.log('📨 Mensaje enviado a Telegram');
   } catch (error) {
     console.error('❌ Error enviando mensaje a Telegram:', error.message);
   }
 }
 
-async function checkOffers() {
+async function checkOffers(isFirstRun = false) {
   console.log('🔎 Iniciando chequeo de ofertas...');
   const state = loadState();
   const seenOffers = new Set(state.seen_offers);
@@ -155,31 +176,53 @@ async function checkOffers() {
 
   let newCount = 0;
 
-  // Primera ejecución: marcamos todas las ofertas como vistas sin enviar mensajes
-  if (state.firstRun) {
-    console.log('👋 Primera ejecución: registrando ofertas sin enviar mensajes.');
-    state.firstRun = false;
+  // Si es la primera ejecución, enviar TODAS las ofertas
+  if (isFirstRun) {
+    console.log('🚀 Primera ejecución: enviando TODAS las ofertas publicadas...');
+    
+    for (const offer of offers) {
+      const message = `
+<b>📢 Oferta Publicada:</b>
+<b>Cargo:</b> ${offer.title}
+<b>Cierre de oferta:</b> ${offer.cierreoferta}
+<b>Estado:</b> ${offer.estado}
+<b>Zona:</b> ${offer.zone}
+<b>Nivel o Modalidad:</b> ${offer.nivelModalidad}
+<b>Curso/División:</b> ${offer.cursodivision} - Turno: ${offer.turno}
+<b>Domicilio:</b> ${offer.domiciliodesempeno}
+<b>Suplente revista:</b> ${offer.supl_revista}
+<b>Toma posesión:</b> ${offer.tomaposesion}
+<b>Suplente hasta:</b> ${offer.supl_hasta}
+<b>Enlace:</b> ${offer.link}
+`;
+      await sendTelegramMessage(message);
+      newCount++;
+    }
+    
+    // Guardar todas las ofertas como vistas para próximas ejecuciones
     state.seen_offers = offers.map(o => o.id);
+    state.firstRun = false;
     saveState(state);
-    console.log(`✅ Estado inicial guardado con ${offers.length} ofertas.`);
+    console.log(`✅ Primera ejecución completada. Total ofertas enviadas: ${newCount}`);
     return;
   }
 
-  // De aquí en adelante, enviamos solo las ofertas nuevas
+  // Ejecuciones posteriores: solo ofertas nuevas
   for (const offer of offers) {
     if (!seenOffers.has(offer.id)) {
       const message = `
-<b>Oferta:</b>
-<b> Cargo:</b> ${offer.title}
-<b> Cierre de oferta: </b> ${offer.cierreoferta} - Estado: ${offer.estado}
-<b> Zona: </b> ${offer.zone}
-<b> Nivel o Modalidad: </b> ${offer.nivelModalidad}
-<b> Curso/División: </b> ${offer.cursodivision} - Turno: ${offer.turno}
-<b> Domicilio: </b> ${offer.domiciliodesempeno}
-<b> Suplente revista: </b>${offer.supl_revista}
-<b> Toma posesión: </b> ${offer.tomaposesion}
-<b> Suplente hasta: </b> ${offer.supl_hasta}
-<b> Enlace: </b> ${offer.link}
+<b>🆕 Nueva Oferta:</b>
+<b>Cargo:</b> ${offer.title}
+<b>Cierre de oferta:</b> ${offer.cierreoferta}
+<b>Estado:</b> ${offer.estado}
+<b>Zona:</b> ${offer.zone}
+<b>Nivel o Modalidad:</b> ${offer.nivelModalidad}
+<b>Curso/División:</b> ${offer.cursodivision} - Turno: ${offer.turno}
+<b>Domicilio:</b> ${offer.domiciliodesempeno}
+<b>Suplente revista:</b> ${offer.supl_revista}
+<b>Toma posesión:</b> ${offer.tomaposesion}
+<b>Suplente hasta:</b> ${offer.supl_hasta}
+<b>Enlace:</b> ${offer.link}
 `;
       await sendTelegramMessage(message);
       seenOffers.add(offer.id);
@@ -192,18 +235,22 @@ async function checkOffers() {
   console.log(`✅ Chequeo finalizado. Nuevas ofertas enviadas: ${newCount}`);
 }
 
-// Programar la tarea para que corra cada 40 minutos
-cron.schedule('*/40 * * * *', () => {
-  console.log('⏱ Chequeo automático programado...');
-  checkOffers();
+// Cron job cada 30 minutos
+cron.schedule('*/30 * * * *', () => {
+  console.log('⏱ Chequeo automático programado (cada 30 min)...');
+  checkOffers(false); // false = no es primera ejecución
 });
 
-// Ejecutar una vez al iniciar la aplicación
-checkOffers();
+// Primera ejecución al iniciar - ENVÍA TODAS LAS OFERTAS
+(async () => {
+  const state = loadState();
+  const isFirstRun = state.firstRun !== false; // Si no existe o es true
+  await checkOffers(isFirstRun);
+})();
 
-// Función para envío manual de todas las ofertas
+// Función para envío manual (solo para testing)
 async function forzarEnvio() {
-  console.log('🚀 Envío manual forzado de todas las ofertas...');
+  console.log('🧪 Envío manual para testing...');
   const filters = loadConfig();
   const offers = await getOffers(filters);
 
@@ -212,40 +259,31 @@ async function forzarEnvio() {
     return;
   }
 
-  // Log de prueba: muestra la primera oferta sin afectar el envío de todas
-  const primera = offers[0];
-  console.log('📋 Oferta ejemplo para prueba manual:');
-  console.log(`  Cargo: ${primera.title}`);
-  console.log(`  Cierre: ${primera.cierreoferta} - Estado: ${primera.estado}`);
-  console.log(`  Zona: ${primera.zone}`);
-  console.log(`  Nivel/Modalidad: ${primera.nivelModalidad}`);
-  console.log(`  Escuela: ${primera.escuela}`);
-  console.log(`  Domicilio: ${primera.domiciliodesempeno}`);
-  console.log('----------------------------------------------------');
-
-  // Enviar todas las ofertas al canal
   for (const offer of offers) {
     const message = `
-<b>Oferta:</b>
-Cargo: ${offer.title}
-Cierre de oferta: ${offer.cierreoferta} - Estado: ${offer.estado}
-Zona: ${offer.zone}
-Nivel o Modalidad: ${offer.nivelModalidad}
-Curso/División: ${offer.cursodivision} - Turno: ${offer.turno}
-Domicilio: ${offer.domiciliodesempeno}
-Suplente revista: ${offer.supl_revista}
-Toma posesión: ${offer.tomaposesion}
-Suplente hasta: ${offer.supl_hasta}
-Enlace: ${offer.link}
+<b>🧪 Oferta (TEST):</b>
+<b>Cargo:</b> ${offer.title}
+<b>Cierre de oferta:</b> ${offer.cierreoferta}
+<b>Estado:</b> ${offer.estado}
+<b>Zona:</b> ${offer.zone}
+<b>Nivel o Modalidad:</b> ${offer.nivelModalidad}
+<b>Curso/División:</b> ${offer.cursodivision} - Turno: ${offer.turno}
+<b>Domicilio:</b> ${offer.domiciliodesempeno}
+<b>Suplente revista:</b> ${offer.supl_revista}
+<b>Toma posesión:</b> ${offer.tomaposesion}
+<b>Suplente hasta:</b> ${offer.supl_hasta}
+<b>Enlace:</b> ${offer.link}
 `;
     await sendTelegramMessage(message);
   }
 
-  console.log(`✅ Envío manual completado. Total de ofertas enviadas: ${offers.length}`);
+  console.log(`✅ Testing completado. Total ofertas enviadas: ${offers.length}`);
 }
 
-// Para probar manualmente, descomenta la siguiente línea:
-//forzarEnvio();
+// Descomenta la siguiente línea SOLO para testing
+// forzarEnvio();
+
+// app escucha en el puerto
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en puerto ${PORT}`);
 });
