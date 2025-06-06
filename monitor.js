@@ -170,17 +170,16 @@ async function checkOffers() {
     if (!seenOffers.has(offer.id)) {
       const message = `
 <b>Oferta:</b>
-Cargo: ${offer.title}
-Cierre de oferta: ${offer.cierreoferta} - Estado: ${offer.estado}
-Zona: ${offer.zone}
-Nivel o Modalidad: ${offer.nivelModalidad}
-Curso/División: ${offer.cursodivision} - Turno: ${offer.turno}
-Escuela: ${offer.escuela}
-Domicilio: ${offer.domiciliodesempeno}
-Suplente revista: ${offer.supl_revista}
-Toma posesión: ${offer.tomaposesion}
-Suplente hasta: ${offer.supl_hasta}
-Enlace: ${offer.link}
+<b> Cargo:</b> ${offer.title}
+<b> Cierre de oferta: </b> ${offer.cierreoferta} - Estado: ${offer.estado}
+<b> Zona: </b> ${offer.zone}
+<b> Nivel o Modalidad: </b> ${offer.nivelModalidad}
+<b> Curso/División: </b> ${offer.cursodivision} - Turno: ${offer.turno}
+<b> Domicilio: </b> ${offer.domiciliodesempeno}
+<b> Suplente revista: </b>${offer.supl_revista}
+<b> Toma posesión: </b> ${offer.tomaposesion}
+<b> Suplente hasta: </b> ${offer.supl_hasta}
+<b> Enlace: </b> ${offer.link}
 `;
       await sendTelegramMessage(message);
       seenOffers.add(offer.id);
@@ -233,7 +232,6 @@ Cierre de oferta: ${offer.cierreoferta} - Estado: ${offer.estado}
 Zona: ${offer.zone}
 Nivel o Modalidad: ${offer.nivelModalidad}
 Curso/División: ${offer.cursodivision} - Turno: ${offer.turno}
-Escuela: ${offer.escuela}
 Domicilio: ${offer.domiciliodesempeno}
 Suplente revista: ${offer.supl_revista}
 Toma posesión: ${offer.tomaposesion}
@@ -247,7 +245,7 @@ Enlace: ${offer.link}
 }
 
 // Para probar manualmente, descomenta la siguiente línea:
-//forzarEnvio();
+forzarEnvio();
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en puerto ${PORT}`);
 });
