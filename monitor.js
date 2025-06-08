@@ -165,12 +165,6 @@ async function getOffers(filters) {
     });
 
     const docs = response.data.response?.docs || [];
-    console.log(`📥 Ofertas totales recibidas: ${docs.length}`);
-    console.log('📝 Datos crudos de cursodivision:', docs.slice(0, 2).map(doc => doc.cursodivision));
-    console.log('📝 Datos crudos de cargo:', docs.slice(0, 2).map(doc => doc.cargo));
-    console.log('📝 Datos crudos de escuela:', docs.slice(0, 2).map(doc => doc.escuela));
-    console.log('📝 Datos crudos de domiciliodesempeno:', docs.slice(0, 2).map(doc => doc.domiciliodesempeno));
-    console.log('📝 Datos crudos de observaciones:', docs.slice(0, 2).map(doc => doc.observaciones));
 
     return docs.map((offer) => {
       const offerId = offer.idoferta || offer.id || '';
@@ -179,11 +173,6 @@ async function getOffers(filters) {
       const escuela = cleanString(offer.escuela);
       const domiciliodesempeno = cleanString(offer.domiciliodesempeno);
       const observaciones = cleanString(offer.observaciones);
-      console.log(`📝 cursodivision procesado: "${offer.cursodivision}" -> "${cursodivision}"`);
-      console.log(`📝 cargo procesado: "${offer.cargo}" -> "${cargo}"`);
-      console.log(`📝 escuela procesado: "${offer.escuela}" -> "${escuela}"`);
-      console.log(`📝 domiciliodesempeno procesado: "${offer.domiciliodesempeno}" -> "${domiciliodesempeno}"`);
-      console.log(`📝 observaciones procesado: "${offer.observaciones}" -> "${observaciones}"`);
       return {
         id: offerId.toString(),
         title: cargo,
