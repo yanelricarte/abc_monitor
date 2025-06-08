@@ -14,8 +14,10 @@
   "description": "��#\u0000 \u0000a\u0000b\u0000c\u0000_\u0000m\u0000o\u0000n\u0000i\u0000t\u0000o\u0000r\u0000\r\u0000 \u0000",
   "dependencies": {
     "axios": "^1.9.0",
+    "chardet": "^2.1.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "iconv-lite": "^0.6.3",
     "node-cron": "^4.1.0",
     "node-telegram-bot-api": "^0.66.0"
   },

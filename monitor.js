@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
+const URL = 'https://abc-monitor.onrender.com/';
 
 app.get('/', (_req, res) => {
   res.send('Bot activo y funcionando!');
@@ -27,51 +28,88 @@ const URL_API = 'https://servicios3.abc.gob.ar/valoracion.docente/api/apd.oferta
 const ESTADO_FILE = 'estado_ofertas.json';
 const CONFIG_FILE = 'config.json';
 
-// 👉 Formatea fechas al estilo argentino
+// Formatea fechas al estilo argentino
 function formatDateArg(dateStr) {
   if (!dateStr) return '';
   const date = new Date(dateStr);
   return isNaN(date) ? dateStr : new Intl.DateTimeFormat('es-AR').format(date);
 }
 
+// Mapa de reemplazos para errores de codificación
+const encodingFixes = {
+  'Ã¡': 'á', 'Ã©': 'é', 'Ã­': 'í', 'Ã³': 'ó', 'Ãº': 'ú',
+  'ÃÀ': 'Á', 'ÃÉ': 'É', 'ÃÍ': 'Í', 'ÃÓ': 'Ó', 'ÃÚ': 'Ú',
+  'Ã±': 'ñ', 'ÃÑ': 'Ñ', 'ÂÑ': 'Ñ', 'Ãñ': 'ñ',
+  'Ãí': 'í', 'ÃÍ': 'Í', 'Ã³': 'ó', 'ÃÓ': 'Ó', 'Ãá': 'á', 'ÃÁ': 'Á',
+  'Â¡': '¡', 'Â¿': '¿', 'Ã¼': 'ü', 'Ãœ': 'Ü',
+  'Â°': '°', 'º': '°', 'Ã°': '°', 'Ã‚Â°': '°', 'Ãº°': '°', // Símbolo °
+  'Ã': '', 'Â': '', // Eliminar caracteres extraños
+  'â€¢': '•', 'â€“': '–', 'â€': '€', 'â„¢': '™'
+};
+
+// Función para corregir codificación
 function fixEncoding(str) {
   if (!str || typeof str !== 'string') return '';
-  return str
-    .replace(/�/g, (match, offset, string) => {
-      if (string[offset + 1]?.match(/[aAeE]/)) return 'á';
-      if (string[offset + 1]?.match(/[eEiI]/)) return 'é';
-      if (string[offset + 1]?.match(/[iIoO]/)) return 'í';
-      if (string[offset + 1]?.match(/[oOuU]/)) return 'ó';
-      if (string[offset + 1]?.match(/[uUnN]/)) return 'ú';
-      return '°';
-    })
-    .replace(/Ã¡/g, 'á')
-    .replace(/Ã©/g, 'é')
-    .replace(/Ã­/g, 'í')
-    .replace(/Ã³/g, 'ó')
-    .replace(/Ãº/g, 'ú')
-    .replace(/Ã±/g, 'ñ')
-    .replace(/Ã/g, 'Á')
-    .replace(/Ã‰/g, 'É')
-    .replace(/Ã/g, 'Í')
-    .replace(/Ã"/g, 'Ó')
-    .replace(/Ãš/g, 'Ú')
-    .replace(/Ã'/g, 'Ñ');
+  
+  console.log(`📝 Texto original: "${str}"`);
+  
+  let fixed = str;
+  // Aplicar reemplazos específicos
+  for (const [wrong, correct] of Object.entries(encodingFixes)) {
+    fixed = fixed.replace(new RegExp(wrong, 'g'), correct);
+  }
+  
+  // Eliminar carácter � (U+FFFD)
+  fixed = fixed.replace(/\uFFFD/g, '');
+  
+  // Preservar caracteres imprimibles, permitiendo acentos y °
+  fixed = fixed.replace(/[^\x20-\x7E0-9a-zA-ZáéíóúñÁÉÍÓÚÑ¡¿üÜ°\s]/g, '');
+  
+  // Para cursodivision, garantizar un espacio si no hay °
+  if (fixed.match(/^\d+[A-Za-z]$/)) { // Ejemplo: "5A" -> "5 A"
+    fixed = fixed.replace(/(\d+)([A-Za-z])/, '$1 $2');
+  }
+  
+  console.log(`📝 Texto corregido: "${fixed}"`);
+  return fixed;
 }
 
 function cleanString(str) {
   if (!str) return '';
-  return fixEncoding(str.trim().normalize('NFC'));
+  return fixEncoding(str.trim());
 }
 
-// Fixed function name and implementation
+// Formatear horarios de desempeño
+function formatSchedule(offer) {
+  const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+  const dayNames = {
+    'lunes': 'Lunes',
+    'martes': 'Martes', 
+    'miercoles': 'Miércoles',
+    'jueves': 'Jueves',
+    'viernes': 'Viernes',
+    'sabado': 'Sábado'
+  };
+  
+  const schedule = [];
+  
+  for (const day of days) {
+    const time = offer[day];
+    if (time && time.trim() !== '') {
+      schedule.push(`${dayNames[day]}: ${time.trim()}`);
+    }
+  }
+  
+  return schedule.length > 0 ? schedule.join('\n') : 'No especificado';
+}
+
+// Formatear fechas y horas
 function formatDateTimeArg(dateTimeStr, omitSpecificTime = false) {
   if (!dateTimeStr) return '';
   let dt = dateTimeStr.endsWith('Z') ? dateTimeStr.slice(0, -1) : dateTimeStr;
   if (omitSpecificTime && dt.endsWith('T03:00:00')) {
     return dt.slice(0, 10);
   }
-  // Format the datetime for Argentina locale
   try {
     const date = new Date(dt);
     return isNaN(date) ? dt : new Intl.DateTimeFormat('es-AR', {
@@ -100,7 +138,6 @@ function saveState(state) {
 }
 
 function loadConfig() {
-  // Usar variables de entorno si están disponibles, sino valores por defecto
   return {
     rows: parseInt(process.env.ROWS) || 100,
     descdistrito: process.env.DISTRITO || 'general pueyrredon',
@@ -129,24 +166,42 @@ async function getOffers(filters) {
 
     const docs = response.data.response?.docs || [];
     console.log(`📥 Ofertas totales recibidas: ${docs.length}`);
+    console.log('📝 Datos crudos de cursodivision:', docs.slice(0, 2).map(doc => doc.cursodivision));
+    console.log('📝 Datos crudos de cargo:', docs.slice(0, 2).map(doc => doc.cargo));
+    console.log('📝 Datos crudos de escuela:', docs.slice(0, 2).map(doc => doc.escuela));
+    console.log('📝 Datos crudos de domiciliodesempeno:', docs.slice(0, 2).map(doc => doc.domiciliodesempeno));
+    console.log('📝 Datos crudos de observaciones:', docs.slice(0, 2).map(doc => doc.observaciones));
 
     return docs.map((offer) => {
       const offerId = offer.idoferta || offer.id || '';
+      const cursodivision = cleanString(offer.cursodivision);
+      const cargo = cleanString(offer.cargo);
+      const escuela = cleanString(offer.escuela);
+      const domiciliodesempeno = cleanString(offer.domiciliodesempeno);
+      const observaciones = cleanString(offer.observaciones);
+      console.log(`📝 cursodivision procesado: "${offer.cursodivision}" -> "${cursodivision}"`);
+      console.log(`📝 cargo procesado: "${offer.cargo}" -> "${cargo}"`);
+      console.log(`📝 escuela procesado: "${offer.escuela}" -> "${escuela}"`);
+      console.log(`📝 domiciliodesempeno procesado: "${offer.domiciliodesempeno}" -> "${domiciliodesempeno}"`);
+      console.log(`📝 observaciones procesado: "${offer.observaciones}" -> "${observaciones}"`);
       return {
         id: offerId.toString(),
-        title: cleanString(offer.cargo),
+        title: cargo,
         cierreoferta: formatDateTimeArg(offer.finoferta),
         zone: cleanString(offer.descdistrito),
         nivelModalidad: cleanString(offer.descnivelmodalidad),
-        cursodivision: cleanString(offer.cursodivision),
-        escuela: cleanString(offer.escuela),
-        domiciliodesempeno: cleanString(offer.domiciliodesempeno),
+        cursodivision: cursodivision,
+        escuela: escuela,
+        domiciliodesempeno: domiciliodesempeno,
         estado: cleanString(offer.estado),
+        iniciooferta: formatDateArg(cleanString(offer.iniciooferta)),
         supl_hasta: formatDateArg(cleanString(offer.supl_hasta)),
         turno: cleanString(offer.turno),
         tomaposesion: formatDateArg(cleanString(offer.tomaposesion)),
         supl_revista: cleanString(offer.supl_revista),
         position_type: cleanString(offer.area),
+        horarios: formatSchedule(offer),
+        observaciones: observaciones,
         link: `https://servicios.abc.gob.ar/actos.publicos.digitales/`
       };
     });
@@ -165,6 +220,45 @@ async function sendTelegramMessage(message) {
   }
 }
 
+function createOfferMessage(offer, isNew = true) {
+  const title = isNew ? '🆕 Nueva Oferta:' : '📢 Oferta Publicada:';
+  
+  let message = `
+<b>${title}</b>
+<b>Cargo:</b> ${offer.title}
+<b>Cierre de oferta:</b> ${offer.cierreoferta}
+<b>Estado:</b> ${offer.estado}
+<b>Distrito:</b> ${offer.zone}
+<b>Nivel o Modalidad:</b> ${offer.nivelModalidad}
+<b>Curso/División:</b> ${offer.cursodivision} - Turno: ${offer.turno}
+<b>Domicilio:</b> ${offer.domiciliodesempeno}`;
+
+  if (offer.horarios && offer.horarios !== 'No especificado') {
+    message += `\n<b>📅 Horarios de desempeño:</b>\n${offer.horarios}`;
+  }
+
+  if (offer.jornada) {
+    message += `\n<b>Jornada:</b> ${offer.jornada}`;
+  }
+  
+  if (offer.hsmodulos) {
+    message += `\n<b>Horas/Módulos:</b> ${offer.hsmodulos}`;
+  }
+
+  message += `
+<b>Revista:</b> ${offer.supl_revista}
+<b>Inicio:</b> ${offer.iniciooferta}
+<b>Hasta:</b> ${offer.supl_hasta}`;
+
+  if (offer.observaciones && offer.observaciones.trim()) {
+    message += `\n<b>Observaciones:</b> ${offer.observaciones}`;
+  }
+
+  message += `\n<b>Enlace:</b> ${offer.link}`;
+
+  return message;
+}
+
 async function checkOffers(isFirstRun = false) {
   console.log('🔎 Iniciando chequeo de ofertas...');
   const state = loadState();
@@ -176,30 +270,15 @@ async function checkOffers(isFirstRun = false) {
 
   let newCount = 0;
 
-  // Si es la primera ejecución, enviar TODAS las ofertas
   if (isFirstRun) {
     console.log('🚀 Primera ejecución: enviando TODAS las ofertas publicadas...');
     
     for (const offer of offers) {
-      const message = `
-<b>📢 Oferta Publicada:</b>
-<b>Cargo:</b> ${offer.title}
-<b>Cierre de oferta:</b> ${offer.cierreoferta}
-<b>Estado:</b> ${offer.estado}
-<b>Zona:</b> ${offer.zone}
-<b>Nivel o Modalidad:</b> ${offer.nivelModalidad}
-<b>Curso/División:</b> ${offer.cursodivision} - Turno: ${offer.turno}
-<b>Domicilio:</b> ${offer.domiciliodesempeno}
-<b>Suplente revista:</b> ${offer.supl_revista}
-<b>Toma posesión:</b> ${offer.tomaposesion}
-<b>Suplente hasta:</b> ${offer.supl_hasta}
-<b>Enlace:</b> ${offer.link}
-`;
+      const message = createOfferMessage(offer, false);
       await sendTelegramMessage(message);
       newCount++;
     }
     
-    // Guardar todas las ofertas como vistas para próximas ejecuciones
     state.seen_offers = offers.map(o => o.id);
     state.firstRun = false;
     saveState(state);
@@ -207,23 +286,9 @@ async function checkOffers(isFirstRun = false) {
     return;
   }
 
-  // Ejecuciones posteriores: solo ofertas nuevas
   for (const offer of offers) {
     if (!seenOffers.has(offer.id)) {
-      const message = `
-<b>🆕 Nueva Oferta:</b>
-<b>Cargo:</b> ${offer.title}
-<b>Cierre de oferta:</b> ${offer.cierreoferta}
-<b>Estado:</b> ${offer.estado}
-<b>Zona:</b> ${offer.zone}
-<b>Nivel o Modalidad:</b> ${offer.nivelModalidad}
-<b>Curso/División:</b> ${offer.cursodivision} - Turno: ${offer.turno}
-<b>Domicilio:</b> ${offer.domiciliodesempeno}
-<b>Suplente revista:</b> ${offer.supl_revista}
-<b>Toma posesión:</b> ${offer.tomaposesion}
-<b>Suplente hasta:</b> ${offer.supl_hasta}
-<b>Enlace:</b> ${offer.link}
-`;
+      const message = createOfferMessage(offer, true);
       await sendTelegramMessage(message);
       seenOffers.add(offer.id);
       newCount++;
@@ -235,20 +300,17 @@ async function checkOffers(isFirstRun = false) {
   console.log(`✅ Chequeo finalizado. Nuevas ofertas enviadas: ${newCount}`);
 }
 
-// Cron job cada 30 minutos
 cron.schedule('*/30 * * * *', () => {
   console.log('⏱ Chequeo automático programado (cada 30 min)...');
-  checkOffers(false); // false = no es primera ejecución
+  checkOffers(false);
 });
 
-// Primera ejecución al iniciar - ENVÍA TODAS LAS OFERTAS
 (async () => {
   const state = loadState();
-  const isFirstRun = state.firstRun !== false; // Si no existe o es true
+  const isFirstRun = state.firstRun !== false;
   await checkOffers(isFirstRun);
 })();
 
-// Función para envío manual (solo para testing)
 async function forzarEnvio() {
   console.log('🧪 Envío manual para testing...');
   const filters = loadConfig();
@@ -265,13 +327,17 @@ async function forzarEnvio() {
 <b>Cargo:</b> ${offer.title}
 <b>Cierre de oferta:</b> ${offer.cierreoferta}
 <b>Estado:</b> ${offer.estado}
-<b>Zona:</b> ${offer.zone}
+<b>Distrito:</b> ${offer.zone}
 <b>Nivel o Modalidad:</b> ${offer.nivelModalidad}
 <b>Curso/División:</b> ${offer.cursodivision} - Turno: ${offer.turno}
 <b>Domicilio:</b> ${offer.domiciliodesempeno}
-<b>Suplente revista:</b> ${offer.supl_revista}
+<b>📅 Horarios de desempeño:</b>
+${offer.horarios}
+<b>Revista:</b> ${offer.supl_revista}
 <b>Toma posesión:</b> ${offer.tomaposesion}
-<b>Suplente hasta:</b> ${offer.supl_hasta}
+<b>Inicio:</b> ${offer.iniciooferta}
+<b>Hasta:</b> ${offer.supl_hasta}
+<b>Observaciones:</b> ${offer.observaciones}
 <b>Enlace:</b> ${offer.link}
 `;
     await sendTelegramMessage(message);
@@ -280,10 +346,9 @@ async function forzarEnvio() {
   console.log(`✅ Testing completado. Total ofertas enviadas: ${offers.length}`);
 }
 
-// Descomenta la siguiente línea SOLO para testing
+// Descomenta la siguiente línea para testing
 // forzarEnvio();
 
-// app escucha en el puerto
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en puerto ${PORT}`);
 });
