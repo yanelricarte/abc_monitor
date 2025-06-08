@@ -50,9 +50,7 @@ const encodingFixes = {
 // Función para corregir codificación
 function fixEncoding(str) {
   if (!str || typeof str !== 'string') return '';
-  
-  console.log(`📝 Texto original: "${str}"`);
-  
+    
   let fixed = str;
   // Aplicar reemplazos específicos
   for (const [wrong, correct] of Object.entries(encodingFixes)) {
@@ -70,7 +68,6 @@ function fixEncoding(str) {
     fixed = fixed.replace(/(\d+)([A-Za-z])/, '$1 $2');
   }
   
-  console.log(`📝 Texto corregido: "${fixed}"`);
   return fixed;
 }
 
