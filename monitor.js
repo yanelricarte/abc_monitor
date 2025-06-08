@@ -12,65 +12,60 @@ const PORT = process.env.PORT || 3000;
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
-const URL = 'https://abc-monitor.onrender.com/';
+const URL_API = 'https://servicios3.abc.gob.ar/valoracion.docente/api/apd.oferta.encabezado/select';
+const ESTADO_FILE = 'estado_ofertas.json';
 
-app.get('/', (_req, res) => {
-  res.send('Bot activo y funcionando!');
-});
-
+// Verificación de variables de entorno
 if (!BOT_TOKEN || !CHAT_ID) {
   throw new Error('BOT_TOKEN y CHAT_ID deben estar definidos en las variables de entorno.');
 }
 
+// Inicialización del bot (sin polling porque sólo envía mensajes)
 const bot = new TelegramBot(BOT_TOKEN, { polling: false });
 
-const URL_API = 'https://servicios3.abc.gob.ar/valoracion.docente/api/apd.oferta.encabezado/select';
-const ESTADO_FILE = 'estado_ofertas.json';
-const CONFIG_FILE = 'config.json';
+// Ruta simple para chequear que el bot está activo
+app.get('/', (_req, res) => {
+  res.send('Bot activo y funcionando!');
+});
 
-// Formatea fechas al estilo argentino
+// Función para formatear fechas a formato argentino (dd/mm/yyyy)
 function formatDateArg(dateStr) {
   if (!dateStr) return '';
   const date = new Date(dateStr);
-  return isNaN(date) ? dateStr : new Intl.DateTimeFormat('es-AR').format(date);
+  if (isNaN(date)) return dateStr;
+  return new Intl.DateTimeFormat('es-AR').format(date);
 }
 
-// Mapa de reemplazos para errores de codificación
+// Corrección de errores comunes en codificación
 const encodingFixes = {
   'Ã¡': 'á', 'Ã©': 'é', 'Ã­': 'í', 'Ã³': 'ó', 'Ãº': 'ú',
   'ÃÀ': 'Á', 'ÃÉ': 'É', 'ÃÍ': 'Í', 'ÃÓ': 'Ó', 'ÃÚ': 'Ú',
   'Ã±': 'ñ', 'ÃÑ': 'Ñ', 'ÂÑ': 'Ñ', 'Ãñ': 'ñ',
   'Ãí': 'í', 'ÃÍ': 'Í', 'Ã³': 'ó', 'ÃÓ': 'Ó', 'Ãá': 'á', 'ÃÁ': 'Á',
   'Â¡': '¡', 'Â¿': '¿', 'Ã¼': 'ü', 'Ãœ': 'Ü',
-  'Â°': '°', 'º': '°', 'Ã°': '°', 'Ã‚Â°': '°', 'Ãº°': '°', // Símbolo °
-  'Ã': '', 'Â': '', // Eliminar caracteres extraños
+  'Â°': '°', 'º': '°', 'Ã°': '°', 'Ã‚Â°': '°', 'Ãº°': '°',
+  'Ã': '', 'Â': '',
   'â€¢': '•', 'â€“': '–', 'â€': '€', 'â„¢': '™'
 };
 
-// Función para corregir codificación
+// Función para corregir la codificación en textos
 function fixEncoding(str) {
   if (!str || typeof str !== 'string') return '';
-    
   let fixed = str;
-  // Aplicar reemplazos específicos
   for (const [wrong, correct] of Object.entries(encodingFixes)) {
     fixed = fixed.replace(new RegExp(wrong, 'g'), correct);
   }
-  
-  // Eliminar carácter � (U+FFFD)
-  fixed = fixed.replace(/\uFFFD/g, '');
-  
-  // Preservar caracteres imprimibles, permitiendo acentos y °
+  fixed = fixed.replace(/\uFFFD/g, ''); // eliminar caracter �
+  // Permitir caracteres imprimibles y acentos
   fixed = fixed.replace(/[^\x20-\x7E0-9a-zA-ZáéíóúñÁÉÍÓÚÑ¡¿üÜ°\s]/g, '');
-  
-  // Para cursodivision, garantizar un espacio si no hay °
-  if (fixed.match(/^\d+[A-Za-z]$/)) { // Ejemplo: "5A" -> "5 A"
+  // Espacio entre número y letra si es formato "5A" -> "5 A"
+  if (fixed.match(/^\d+[A-Za-z]$/)) {
     fixed = fixed.replace(/(\d+)([A-Za-z])/, '$1 $2');
   }
-  
   return fixed;
 }
 
+// Limpieza y corrección de strings
 function cleanString(str) {
   if (!str) return '';
   return fixEncoding(str.trim());
@@ -80,27 +75,24 @@ function cleanString(str) {
 function formatSchedule(offer) {
   const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
   const dayNames = {
-    'lunes': 'Lunes',
-    'martes': 'Martes', 
-    'miercoles': 'Miércoles',
-    'jueves': 'Jueves',
-    'viernes': 'Viernes',
-    'sabado': 'Sábado'
+    lunes: 'Lunes',
+    martes: 'Martes',
+    miercoles: 'Miércoles',
+    jueves: 'Jueves',
+    viernes: 'Viernes',
+    sabado: 'Sábado'
   };
-  
   const schedule = [];
-  
   for (const day of days) {
     const time = offer[day];
     if (time && time.trim() !== '') {
       schedule.push(`${dayNames[day]}: ${time.trim()}`);
     }
   }
-  
   return schedule.length > 0 ? schedule.join('\n') : 'No especificado';
 }
 
-// Formatear fechas y horas
+// Formatear fecha y hora con opción de omitir hora específica
 function formatDateTimeArg(dateTimeStr, omitSpecificTime = false) {
   if (!dateTimeStr) return '';
   let dt = dateTimeStr.endsWith('Z') ? dateTimeStr.slice(0, -1) : dateTimeStr;
@@ -109,7 +101,8 @@ function formatDateTimeArg(dateTimeStr, omitSpecificTime = false) {
   }
   try {
     const date = new Date(dt);
-    return isNaN(date) ? dt : new Intl.DateTimeFormat('es-AR', {
+    if (isNaN(date)) return dt;
+    return new Intl.DateTimeFormat('es-AR', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -121,6 +114,7 @@ function formatDateTimeArg(dateTimeStr, omitSpecificTime = false) {
   }
 }
 
+// Cargar estado desde archivo
 function loadState() {
   try {
     const data = fs.readFileSync(ESTADO_FILE, 'utf8');
@@ -130,10 +124,12 @@ function loadState() {
   }
 }
 
+// Guardar estado en archivo
 function saveState(state) {
   fs.writeFileSync(ESTADO_FILE, JSON.stringify(state, null, 2));
 }
 
+// Cargar configuración desde variables de entorno o valores por defecto
 function loadConfig() {
   return {
     rows: parseInt(process.env.ROWS) || 100,
@@ -142,6 +138,7 @@ function loadConfig() {
   };
 }
 
+// Obtener ofertas desde la API con filtros
 async function getOffers(filters) {
   try {
     const params = new URLSearchParams();
@@ -165,20 +162,15 @@ async function getOffers(filters) {
 
     return docs.map((offer) => {
       const offerId = offer.idoferta || offer.id || '';
-      const cursodivision = cleanString(offer.cursodivision);
-      const cargo = cleanString(offer.cargo);
-      const escuela = cleanString(offer.escuela);
-      const domiciliodesempeno = cleanString(offer.domiciliodesempeno);
-      const observaciones = cleanString(offer.observaciones);
       return {
         id: offerId.toString(),
-        title: cargo,
+        title: cleanString(offer.cargo),
         cierreoferta: formatDateTimeArg(offer.finoferta),
         zone: cleanString(offer.descdistrito),
         nivelModalidad: cleanString(offer.descnivelmodalidad),
-        cursodivision: cursodivision,
-        escuela: escuela,
-        domiciliodesempeno: domiciliodesempeno,
+        cursodivision: cleanString(offer.cursodivision),
+        escuela: cleanString(offer.escuela),
+        domiciliodesempeno: cleanString(offer.domiciliodesempeno),
         estado: cleanString(offer.estado),
         iniciooferta: formatDateArg(cleanString(offer.iniciooferta)),
         supl_hasta: formatDateArg(cleanString(offer.supl_hasta)),
@@ -187,7 +179,7 @@ async function getOffers(filters) {
         supl_revista: cleanString(offer.supl_revista),
         position_type: cleanString(offer.area),
         horarios: formatSchedule(offer),
-        observaciones: observaciones,
+        observaciones: cleanString(offer.observaciones),
         link: `https://servicios.abc.gob.ar/actos.publicos.digitales/`
       };
     });
@@ -197,6 +189,7 @@ async function getOffers(filters) {
   }
 }
 
+// Enviar mensaje por Telegram
 async function sendTelegramMessage(message) {
   try {
     await bot.sendMessage(CHAT_ID, message, { parse_mode: 'HTML' });
@@ -206,11 +199,11 @@ async function sendTelegramMessage(message) {
   }
 }
 
+// Crear el mensaje para una oferta (nuevo o ya publicada)
 function createOfferMessage(offer, isNew = true) {
   const title = isNew ? '🆕 Nueva Oferta:' : '📢 Oferta Publicada:';
-  
-  let message = `
-<b>${title}</b>
+
+  let message = `<b>${title}</b>
 <b>Cargo:</b> ${offer.title}
 <b>Cierre de oferta:</b> ${offer.cierreoferta}
 <b>Estado:</b> ${offer.estado}
@@ -226,7 +219,7 @@ function createOfferMessage(offer, isNew = true) {
   if (offer.jornada) {
     message += `\n<b>Jornada:</b> ${offer.jornada}`;
   }
-  
+
   if (offer.hsmodulos) {
     message += `\n<b>Horas/Módulos:</b> ${offer.hsmodulos}`;
   }
@@ -234,107 +227,108 @@ function createOfferMessage(offer, isNew = true) {
   message += `
 <b>Revista:</b> ${offer.supl_revista}
 <b>Inicio:</b> ${offer.iniciooferta}
-<b>Hasta:</b> ${offer.supl_hasta}`;
-
-  if (offer.observaciones && offer.observaciones.trim()) {
-    message += `\n<b>Observaciones:</b> ${offer.observaciones}`;
-  }
-
-  message += `\n<b>Enlace:</b> ${offer.link}`;
+<b>Suplencia hasta:</b> ${offer.supl_hasta}
+<b>Toma de posesión:</b> ${offer.tomaposesion}
+<b>Escuela:</b> ${offer.escuela}
+<b>Observaciones:</b> ${offer.observaciones}
+<a href="${offer.link}">Enlace a la oferta completa</a>`;
 
   return message;
 }
 
-async function checkOffers(isFirstRun = false) {
-  console.log('🔎 Iniciando chequeo de ofertas...');
-  const state = loadState();
-  const seenOffers = new Set(state.seen_offers);
-  const filters = loadConfig();
+// --- NUEVO: Gestión de usuarios que inician el bot ---
 
-  const offers = await getOffers(filters);
-  console.log(`🔢 Total ofertas procesadas: ${offers.length}`);
+const USERS_FILE = 'usuarios.json';
 
-  let newCount = 0;
-
-  if (isFirstRun) {
-    console.log('🚀 Primera ejecución: enviando TODAS las ofertas publicadas...');
-    
-    for (const offer of offers) {
-      const message = createOfferMessage(offer, false);
-      await sendTelegramMessage(message);
-      newCount++;
-    }
-    
-    state.seen_offers = offers.map(o => o.id);
-    state.firstRun = false;
-    saveState(state);
-    console.log(`✅ Primera ejecución completada. Total ofertas enviadas: ${newCount}`);
-    return;
+function loadUsers() {
+  try {
+    return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+  } catch {
+    return [];
   }
-
-  for (const offer of offers) {
-    if (!seenOffers.has(offer.id)) {
-      const message = createOfferMessage(offer, true);
-      await sendTelegramMessage(message);
-      seenOffers.add(offer.id);
-      newCount++;
-    }
-  }
-
-  state.seen_offers = Array.from(seenOffers);
-  saveState(state);
-  console.log(`✅ Chequeo finalizado. Nuevas ofertas enviadas: ${newCount}`);
 }
 
-cron.schedule('*/30 * * * *', () => {
-  console.log('⏱ Chequeo automático programado (cada 30 min)...');
-  checkOffers(false);
-});
+function saveUsers(users) {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
 
-(async () => {
-  const state = loadState();
-  const isFirstRun = state.firstRun !== false;
-  await checkOffers(isFirstRun);
-})();
+async function sendTelegramMessageToAll(message) {
+  const users = loadUsers();
+  for (const chatId of users) {
+    try {
+      await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+      console.log(`📨 Mensaje enviado a usuario ${chatId}`);
+    } catch (error) {
+      console.error(`❌ Error enviando mensaje a usuario ${chatId}:`, error.message);
+    }
+  }
+}
 
-async function forzarEnvio() {
-  console.log('🧪 Envío manual para testing...');
+// Cambiamos a polling para escuchar mensajes entrantes (por ej. /start)
+const botPolling = new TelegramBot(BOT_TOKEN, { polling: true });
+
+botPolling.onText(/\/start/, async (msg) => {
+  const chatId = msg.chat.id;
+  let users = loadUsers();
+
+  if (!users.includes(chatId)) {
+    users.push(chatId);
+    saveUsers(users);
+  }
+
+  // Mensaje de bienvenida
+  await botPolling.sendMessage(chatId, '¡Hola! Bienvenido al bot de ofertas docentes. Aquí recibirás las últimas novedades.');
+
+  // Enviar las últimas ofertas al usuario que inicia
   const filters = loadConfig();
   const offers = await getOffers(filters);
 
   if (offers.length === 0) {
-    console.log('ℹ️ No se encontraron ofertas para enviar.');
+    await botPolling.sendMessage(chatId, 'Actualmente no hay ofertas para mostrar.');
+  } else {
+    for (const offer of offers.slice(0, 5)) { // máximo 5 ofertas para no saturar
+      const message = createOfferMessage(offer, false);
+      await botPolling.sendMessage(chatId, message, { parse_mode: 'HTML' });
+    }
+  }
+});
+
+// Función principal para revisar ofertas y enviar novedades
+async function checkOffers() {
+  console.log('⏰ Revisando ofertas...');
+  const state = loadState();
+  const filters = loadConfig();
+
+  const offers = await getOffers(filters);
+
+  if (state.firstRun) {
+    console.log('Primera ejecución: guardando estado sin enviar mensajes.');
+    state.seen_offers = offers.map((o) => o.id);
+    state.firstRun = false;
+    saveState(state);
     return;
   }
 
   for (const offer of offers) {
-    const message = `
-<b>🧪 Oferta (TEST):</b>
-<b>Cargo:</b> ${offer.title}
-<b>Cierre de oferta:</b> ${offer.cierreoferta}
-<b>Estado:</b> ${offer.estado}
-<b>Distrito:</b> ${offer.zone}
-<b>Nivel o Modalidad:</b> ${offer.nivelModalidad}
-<b>Curso/División:</b> ${offer.cursodivision} - Turno: ${offer.turno}
-<b>Domicilio:</b> ${offer.domiciliodesempeno}
-<b>📅 Horarios de desempeño:</b>
-${offer.horarios}
-<b>Revista:</b> ${offer.supl_revista}
-<b>Toma posesión:</b> ${offer.tomaposesion}
-<b>Inicio:</b> ${offer.iniciooferta}
-<b>Hasta:</b> ${offer.supl_hasta}
-<b>Observaciones:</b> ${offer.observaciones}
-<b>Enlace:</b> ${offer.link}
-`;
-    await sendTelegramMessage(message);
+    if (!state.seen_offers.includes(offer.id)) {
+      console.log('Nueva oferta detectada:', offer.title);
+      const message = createOfferMessage(offer, true);
+      await sendTelegramMessageToAll(message);
+      state.seen_offers.push(offer.id);
+      saveState(state);
+    }
   }
-
-  console.log(`✅ Testing completado. Total ofertas enviadas: ${offers.length}`);
 }
 
-// Descomenta la siguiente línea para testing
-// forzarEnvio();
+// Ejecutar la revisión al iniciar servidor
+checkOffers();
 
+// Programar revisión cada 10 minutos con cron
+cron.schedule('*/10 * * * *', () => {
+  checkOffers();
+});
+
+// Arrancar servidor Express
 app.listen(PORT, () => {
-  console.log(`Servidor escuchando en puerto ${PORT}`);
+  console.log(`Servidor iniciado en http://localhost:${PORT}`);
 });
