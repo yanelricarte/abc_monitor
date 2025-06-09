@@ -2,7 +2,7 @@
   "name": "monitor",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
+  "main": "monitor.js",
   "scripts": {
     "build": "tsc",
     "start": "node monitor.js",
