@@ -24,10 +24,10 @@ if (!BOT_TOKEN || !CHAT_ID) {
 const bot = new TelegramBot(BOT_TOKEN, { polling: false });
 
 // Ruta simple para chequear que el bot está activo
-/*
+
 app.get('/', (_req, res) => {
   res.send('Bot activo y funcionando!');
-});*/
+});
 
 // Función para formatear fechas a formato argentino (dd/mm/yyyy)
 function formatDateArg(dateStr) {
