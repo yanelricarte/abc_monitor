@@ -276,7 +276,7 @@ async function sendTelegramMessageToAll(message) {
   }
 }
 
-// Cambiamos a polling para escuchar mensajes entrantes (por ej. /start)
+// Cambiamos a polling para escuchar mensajes entrantes 
 const botPolling = new TelegramBot(BOT_TOKEN, { polling: true });
 
 botPolling.onText(/\/start/, async (msg) => {
