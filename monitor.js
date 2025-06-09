@@ -1,4 +1,4 @@
-import express from 'express';
+//import express from 'express';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import axios from 'axios';
@@ -8,7 +8,7 @@ import cron from 'node-cron';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+//const PORT = process.env.PORT || 3000;
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
@@ -24,9 +24,10 @@ if (!BOT_TOKEN || !CHAT_ID) {
 const bot = new TelegramBot(BOT_TOKEN, { polling: false });
 
 // Ruta simple para chequear que el bot está activo
+/*
 app.get('/', (_req, res) => {
   res.send('Bot activo y funcionando!');
-});
+});*/
 
 // Función para formatear fechas a formato argentino (dd/mm/yyyy)
 function formatDateArg(dateStr) {
@@ -339,8 +340,8 @@ checkOffers();
 cron.schedule('*/10 * * * *', () => {
   checkOffers();
 });
-
+/* 
 // Arrancar servidor Express
 app.listen(PORT, () => {
   console.log(`Servidor iniciado en http://localhost:${PORT}`);
-});
+});*/
