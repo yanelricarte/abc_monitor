@@ -1,4 +1,4 @@
-//import express from 'express';
+import express from 'express';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import axios from 'axios';
@@ -8,7 +8,7 @@ import cron from 'node-cron';
 dotenv.config();
 
 const app = express();
-//const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
@@ -340,8 +340,8 @@ checkOffers();
 cron.schedule('*/10 * * * *', () => {
   checkOffers();
 });
-/* 
+ 
 // Arrancar servidor Express
 app.listen(PORT, () => {
   console.log(`Servidor iniciado en http://localhost:${PORT}`);
-});*/
+});
